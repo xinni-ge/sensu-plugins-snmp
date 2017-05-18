@@ -115,7 +115,7 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
 
     if config[:match]
       response.each do |oid, value|
-        puts "#{value} matching #{config[:match]}"
+        # puts "#{value} matching #{config[:match]}"
         if value.to_s =~ /#{config[:match]}/
           next
         else
@@ -130,7 +130,7 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
                       else
                         value
                       end
-  
+
         critical 'Critical state detected' if snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i)
         # #YELLOW
         warning 'Warning state detected' if snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i) && !snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i) # rubocop:disable LineLength
