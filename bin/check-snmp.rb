@@ -92,10 +92,18 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
                                      priv_password: config[:password].to_s,
                                      priv_protocol: :des
                                      )
-      response = manager.get(oid: config[:objectid].to_s)
+      resp = manager.walk(oid: config[:objectid].to_s)
+      if resp.count == 0
+          resp = manager.get(oid: config[:objectid].to_s)
+          response = Enumerator.new do |y|
+              y << [config[:objectid].to_s, resp]
+          end
+      else
+          response = resp
+      end
       if config[:debug]
         puts 'DEBUG OUTPUT:'
-        puts response
+        response.each {|oid, value| puts "#{oid}: #{value}"}
       end
     rescue SNMP::RequestTimeout
       unknown "#{config[:host]} not responding"
@@ -106,10 +114,14 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
     symbol = operators[config[:comparison]]
 
     if config[:match]
-      if response.to_s =~ /#{config[:match]}/
+      response.each do |oid, value|
+        puts "#{value} matching #{config[:match]}"
+        if value.to_s =~ /#{config[:match]}/
+          next
+        else
+          critical "Value: #{value} failed to match Pattern: #{config[:match]}"
+        end
         ok
-      else
-        critical "Value: #{response} failed to match Pattern: #{config[:match]}"
       end
     else
       snmp_value =  if config[:convert_timeticks]
