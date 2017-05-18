@@ -121,21 +121,24 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
         else
           critical "Value: #{value} failed to match Pattern: #{config[:match]}"
         end
-        ok
       end
+      ok
     else
-      snmp_value =  if config[:convert_timeticks]
-                      response.is_a?(SNMP::TimeTicks) ? response.to_i : response
-                    else
-                      response
-                    end
-
-      critical 'Critical state detected' if snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i)
-      # #YELLOW
-      warning 'Warning state detected' if snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i) && !snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i) # rubocop:disable LineLength
-      unless snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i)
-        ok 'All is well!'
+      response.each do |oid, value|
+        snmp_value =  if config[:convert_timeticks]
+                        value.is_a?(SNMP::TimeTicks) ? value.to_i : value
+                      else
+                        value
+                      end
+  
+        critical 'Critical state detected' if snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i)
+        # #YELLOW
+        warning 'Warning state detected' if snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i) && !snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i) # rubocop:disable LineLength
+        unless snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i)
+          next
+        end
       end
+      ok 'All is well!'
     end
     manager.close
   end
