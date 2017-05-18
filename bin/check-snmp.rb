@@ -22,6 +22,7 @@
 # for details.
 
 require 'sensu-plugin/check/cli'
+require 'netsnmp'
 require 'snmp'
 
 # Class that checks the return from querying SNMP.
@@ -30,9 +31,9 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
          short: '-h host',
          default: '127.0.0.1'
 
-  option :community,
-         short: '-C snmp community',
-         default: 'public'
+  option :username,
+         short: '-u username',
+         default: 'demo'
 
   option :objectid,
          short: '-O OID',
@@ -54,6 +55,10 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
          short: '-v version',
          description: 'SNMP version to use (SNMPv1, SNMPv2c (default))',
          default: 'SNMPv2c'
+
+  option :password,
+         short: '-p password',
+         default: 'nttcom2017'
 
   option :comparison,
          short: '-o comparison operator',
@@ -80,14 +85,17 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
 
   def run
     begin
-      manager = SNMP::Manager.new(host: config[:host].to_s,
-                                  community: config[:community].to_s,
-                                  version: config[:snmp_version].to_sym,
-                                  timeout: config[:timeout].to_i)
-      response = manager.get([config[:objectid].to_s])
+      manager = NETSNMP::Client.new(host: config[:host].to_s,
+                                     username: config[:username].to_s,
+                                     auth_password: config[:password].to_s,
+                                     auth_protocol: :md5,
+                                     priv_password: config[:password].to_s,
+                                     priv_protocol: :des
+                                     )
+      response = manager.get(oid: config[:objectid].to_s)
       if config[:debug]
         puts 'DEBUG OUTPUT:'
-        response.each_varbind { |vb| puts vb.inspect }
+        puts response
       end
     rescue SNMP::RequestTimeout
       unknown "#{config[:host]} not responding"
@@ -97,26 +105,24 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
     operators = { 'le' => :<=, 'ge' => :>= }
     symbol = operators[config[:comparison]]
 
-    response.each_varbind do |vb|
-      if config[:match]
-        if vb.value.to_s =~ /#{config[:match]}/
-          ok
-        else
-          critical "Value: #{vb.value} failed to match Pattern: #{config[:match]}"
-        end
+    if config[:match]
+      if response.to_s =~ /#{config[:match]}/
+        ok
       else
-        snmp_value =  if config[:convert_timeticks]
-                        vb.value.is_a?(SNMP::TimeTicks) ? vb.value.to_i : vb.value
-                      else
-                        vb.value
-                      end
+        critical "Value: #{response} failed to match Pattern: #{config[:match]}"
+      end
+    else
+      snmp_value =  if config[:convert_timeticks]
+                      response.is_a?(SNMP::TimeTicks) ? response.to_i : response
+                    else
+                      response
+                    end
 
-        critical 'Critical state detected' if snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i)
-        # #YELLOW
-        warning 'Warning state detected' if snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i) && !snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i) # rubocop:disable LineLength
-        unless snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i)
-          ok 'All is well!'
-        end
+      critical 'Critical state detected' if snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i)
+      # #YELLOW
+      warning 'Warning state detected' if snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i) && !snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i) # rubocop:disable LineLength
+      unless snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i)
+        ok 'All is well!'
       end
     end
     manager.close
