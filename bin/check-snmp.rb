@@ -32,7 +32,7 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
          default: '127.0.0.1'
 
   option :username,
-         short: '-u username',
+         short: '-U username',
          default: 'demo'
 
   option :objectid,
@@ -40,12 +40,10 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
          default: '1.3.6.1.4.1.2021.10.1.3.1'
 
   option :warning,
-         short: '-w warning',
-         default: '10'
+         short: '-w warning'
 
   option :critical,
-         short: '-c critical',
-         default: '20'
+         short: '-c critical'
 
   option :match,
          short: '-m match',
@@ -57,7 +55,7 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
          default: 'SNMPv2c'
 
   option :password,
-         short: '-p password',
+         short: '-P password',
          default: 'nttcom2017'
 
   option :comparison,
@@ -131,12 +129,16 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
                         value
                       end
 
-        critical 'Critical state detected' if snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i)
-        # #YELLOW
-        warning 'Warning state detected' if snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i) && !snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i) # rubocop:disable LineLength
-        unless snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i)
-          next
+        if config[:critical]
+            critical 'Critical state detected' if snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i)
         end
+
+        if config[:warning]
+            warning 'Warning state detected' if snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i) && !snmp_value.to_s.to_i.send(symbol, config[:critical].to_s.to_i) # rubocop:disable LineLength
+        end
+        # unless snmp_value.to_s.to_i.send(symbol, config[:warning].to_s.to_i)
+        #   next
+        # end
       end
       ok 'All is well!'
     end
